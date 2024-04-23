@@ -7,6 +7,8 @@ int main(int argc, char* argv[]) {
 
 	const double learningRate = 0.1f;
 
+	double totalGrade = 0.0f;
+
 	double hiddenLayer[numHiddenNodes];
 	double outputLayer[numOutputs];
 
@@ -16,15 +18,33 @@ int main(int argc, char* argv[]) {
 	double hiddenWeights[numInputs][numHiddenNodes];
 	double outputWeights[numHiddenNodes][numOutputs];
 
-	double training_inputs[numTrainingSets][numInputs] = { {0.0f, 0.0f},
-														   {1.0f, 0.0f},
-														   {0.0f, 1.0f}, 
-														   {1.0f, 1.0f} };
+	double training_inputs[numTrainingSets][numInputs] = 
+	{
+		//A, B, Cin
+		{0.0f, 0.0f, 0.0f},
+		{0.0f, 0.0f, 1.0f},
+		{0.0f, 1.0f, 0.0f},
+		{1.0f, 0.0f, 0.0f},
+		{0.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, 0.0f},
+		{1.0f, 0.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f}
+	};
 
-	double training_outputs[numTrainingSets][numOutputs] = { {1.0f},
-															 {0.0f},
-															 {1.0f},
-															 {1.0f} };
+	double training_outputs[numTrainingSets][numOutputs] = 
+	{ 
+		//Sum, Cout
+		{0.0f, 0.0f},
+		{1.0f, 0.0f},
+		{1.0f, 0.0f},
+		{1.0f, 0.0f},
+		{0.0f, 1.0f},
+		{0.0f, 1.0f},
+		{0.0f, 1.0f},
+		{1.0f, 1.0f}
+	};
+
+	int trainingSetOrder[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
 	for (size_t i = 0; i < numInputs; ++i) {
 		for (size_t j = 0; j < numHiddenNodes; ++j) {
@@ -46,20 +66,19 @@ int main(int argc, char* argv[]) {
 		outputLayerBias[i] = init_weights();
 	}
 
-	int trainingSetOrder[] = { 0, 1, 2, 3 };
-
 	//Training Loop for some number of Epcohs
-
 	for (int epoch = 1; epoch < numOfEpochs + 1; ++epoch) {
 
 		shuffle(trainingSetOrder, numTrainingSets);
-		printf("EPOCH: %i\n", epoch);
+
+
+		if(epoch % 100 == 0) { printf("\nEPOCH: %i\n", epoch); }
+		double totalGrade = 0.0f;
 
 		for (size_t x = 0; x < numTrainingSets; ++x) {
 			int i = trainingSetOrder[x];
 
 			//Forward pass
-
 			//Compute hidden layer activation 
 			for (size_t j = 0; j < numHiddenNodes; j++) {
 				double activation = hiddenLayerBias[j];
@@ -79,14 +98,28 @@ int main(int argc, char* argv[]) {
 
 				outputLayer[j] = sigmoid(activation);
 			}
-			
-			printf("Input p: %g    Input q: %g    Output: %g    Predicted Output: %g\n",
-				training_inputs[i][0], training_inputs[i][1],
-				outputLayer[0], training_outputs[i][0]);
 
+			//Output weights
+			if (epoch % 100 == 0) {
+				for (int j = 0; j < numInputs; ++j) {
+					printf("Input %i: %g \n", j, training_inputs[i][j]);
+				}
+				for (int j = 0; j < numOutputs; ++j) {
+					printf("Expected Output %i: %g \n", j, training_outputs[i][j]);
+				}
+				for (int j = 0; j < numOutputs; ++j) {
+					printf("Actual output %i: %g \n", j, outputLayer[j]);
+				}
+
+				//Grade Model
+				double grade = 1 - calculateMSE(outputLayer, training_outputs[i], numOutputs);
+				totalGrade += grade;
+				printf("Accuracy(MSE): %g\n", grade);
+
+				
+			}
 
 			//Back Propagation
-
 			//Compute change in output weights
 			double deltaOutput[numOutputs];
 
@@ -120,26 +153,13 @@ int main(int argc, char* argv[]) {
 					hiddenWeights[k][j] += training_inputs[i][k] * deltaHidden[j] * learningRate;
 				}
 			}
-
-			//fputs("Final Hidden Weights\n[ ", stdout);
-			//for (size_t j = 0; j < numHiddenNodes; ++j) {
-			//	fputs("[ ", stdout);
-			//	for (size_t k = 0; k < numInputs; ++k) {
-			//		printf("%f ", hiddenWeights[k][j]);
-			//	}
-			//}
-
-			//fputs("]\nFinal Hidden Biases\n[ ", stdout);
-			//for (size_t j = 0; j < numHiddenNodes; ++j) {
-			//	printf("%f ", hiddenLayerBias[j]);
-			//}
-
-			//fputs("]\nFinal Output Biases\n[ ", stdout);
-			//for (size_t j = 0; j < numOutputs; ++j) {
-			//	printf("%f ", outputLayerBias[j]);
-			//}
-
 		}
+		if (epoch % 100 == 0) {
+			totalGrade = totalGrade / numTrainingSets;
+			printf("Total accuracy for Epoch: %g \n", totalGrade);
+		}
+		
+
 	}
 }
 
@@ -159,4 +179,30 @@ void shuffle(int* array, size_t n) {
 		}
 
 	}
+}
+double calculateAccuracy(const double actual[], const double predicted[], size_t n) {
+	int correct = 0;
+	for (size_t i = 0; i < n; ++i) {
+		if (actual[i] >= 0.5f) { ++correct; }
+	}
+	return (double)correct / n;
+}
+
+double calculateMSE(const double actual[], const double predicted[], size_t n) {
+	double sumSquareError = 0.0f;
+
+	for (size_t i = 0; i < n; ++i) {
+		double squaredError = pow(actual[i] - predicted[i], 2);
+		sumSquareError += squaredError;
+	}
+	return sumSquareError / n;
+}
+
+double calculateRMSE(const double actual[], const double predicted[], size_t n) {
+	double sum_squared_diff = 0.0f;
+	for (size_t i = 0; i < n; ++i) {
+		double diff = actual[i] - predicted[i];
+		sum_squared_diff += diff * diff;
+	}
+	return sqrt(sum_squared_diff / n);
 }
